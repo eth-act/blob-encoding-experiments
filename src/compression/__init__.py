@@ -6,31 +6,13 @@ from .zstd import ZstdCompressor
 from .gzip import GzipCompressor
 
 
-class ZstdFastCompressor(ZstdCompressor):
-    """Zstandard at level 3 - fast compression."""
-
-    name = "zstd_fast"
-
-    def __init__(self):
-        super().__init__(level=3)
-
-
-class ZstdMidCompressor(ZstdCompressor):
-    """Zstandard at level 6 - balanced compression."""
-
-    name = "zstd_mid"
-
-    def __init__(self):
-        super().__init__(level=6)
-
-
-# Registry of available compressors
-COMPRESSORS: dict[str, type[Compressor]] = {
-    "none": NoCompression,
-    "zstd": ZstdCompressor,
-    "zstd_fast": ZstdFastCompressor,
-    "zstd_mid": ZstdMidCompressor,
-    "gzip": GzipCompressor,
+# Registry of available compressors (instantiated with specific levels)
+COMPRESSORS: dict[str, Compressor] = {
+    "none": NoCompression(),
+    "zstd_3": ZstdCompressor(level=3),
+    "zstd_6": ZstdCompressor(level=6),
+    "zstd_22": ZstdCompressor(level=22),
+    "gzip_9": GzipCompressor(level=9),
 }
 
 
@@ -38,7 +20,7 @@ def get_compressor(name: str) -> Compressor:
     """Get a compressor by name."""
     if name not in COMPRESSORS:
         raise ValueError(f"Unknown compressor: {name}. Available: {list(COMPRESSORS.keys())}")
-    return COMPRESSORS[name]()
+    return COMPRESSORS[name]
 
 
 __all__ = [

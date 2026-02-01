@@ -6,10 +6,9 @@ import zstandard as zstd
 class ZstdCompressor:
     """Zstandard compression."""
 
-    name = "zstd"
-
     def __init__(self, level: int = 22):
         self.level = level
+        self.name = f"zstd_{level}"
         self._compressor = zstd.ZstdCompressor(level=level)
         self._decompressor = zstd.ZstdDecompressor()
 
