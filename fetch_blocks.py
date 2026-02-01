@@ -30,23 +30,7 @@ def fetch_block(beacon_url: str, slot: int | str) -> dict | None:
         block = data["data"]["message"]
         exec_payload = block["body"]["execution_payload"]
 
-        # Build ExecutionPayload in same format as EL fetchers
-        return {
-            "parentHash": exec_payload["parent_hash"],
-            "feeRecipient": exec_payload["fee_recipient"],
-            "stateRoot": exec_payload["state_root"],
-            "receiptsRoot": exec_payload["receipts_root"],
-            "logsBloom": exec_payload["logs_bloom"],
-            "prevRandao": exec_payload["prev_randao"],
-            "blockNumber": exec_payload["block_number"],
-            "gasLimit": exec_payload["gas_limit"],
-            "gasUsed": exec_payload["gas_used"],
-            "timestamp": exec_payload["timestamp"],
-            "extraData": exec_payload["extra_data"],
-            "baseFeePerGas": exec_payload["base_fee_per_gas"],
-            "blockHash": exec_payload["block_hash"],
-            "transactions": exec_payload["transactions"],  # Already raw hex!
-        }
+        return exec_payload
     except Exception as e:
         print(f"  Error fetching slot {slot}: {e}")
         return None
@@ -103,7 +87,7 @@ def main(start: int | None, end: int | None, count: int, beacon: str, output_dir
             try:
                 payload = future.result()
                 if payload:
-                    block_num = int(payload["blockNumber"])
+                    block_num = int(payload["block_number"])
                     output_path = output_dir / f"block_{block_num}.json"
                     with open(output_path, "w") as f:
                         json.dump(payload, f)
