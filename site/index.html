@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blob Encoding Results</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h3 { margin: 0 0 10px 0; color: #666; font-size: 14px; }
+        .card .value { font-size: 32px; font-weight: bold; color: #333; }
+        .card .sub { color: #999; font-size: 14px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #333; color: white; font-weight: 500; }
+        tr:hover { background: #f9f9f9; }
+        .good { color: #22c55e; }
+        .bad { color: #ef4444; }
+        .neutral { color: #666; }
+        .best { background: #dcfce7; }
+        .error { color: #ef4444; padding: 20px; background: white; border-radius: 8px; }
+        h2 { color: #333; margin-top: 30px; }
+        .controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .controls select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Blob Encoding Benchmark Results</h1>
+
+    <div class="summary" id="summary"></div>
+
+    <h2>Aggregate Results</h2>
+    <table id="results">
+        <thead>
+            <tr>
+                <th>Strategy</th>
+                <th>Blobs</th>
+                <th>vs Baseline</th>
+                <th>Raw Size</th>
+                <th>Compressed</th>
+                <th>Compression Ratio</th>
+                <th>Encode (ms)</th>
+                <th>Decode (ms)</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <h2 style="margin-top: 40px;">Individual Block Results</h2>
+    <div class="controls">
+        <label>Filter by strategy:
+            <select id="strategyFilter">
+                <option value="">All strategies</option>
+            </select>
+        </label>
+        <label style="margin-left: 20px;">Filter by block:
+            <select id="blockFilter">
+                <option value="">All blocks</option>
+            </select>
+        </label>
+    </div>
+    <table id="individual">
+        <thead>
+            <tr>
+                <th>Block</th>
+                <th>Strategy</th>
+                <th>Blobs</th>
+                <th>Raw Size</th>
+                <th>Compressed</th>
+                <th>Compression Ratio</th>
+                <th>Efficiency</th>
+                <th>Encode (ms)</th>
+                <th>Decode (ms)</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <script>
+        const baseline = { encoding: 'rlp', compression: 'none', packing: 'naive_31' };
+        let allData = [];
+
+        function formatBytes(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+        }
+
+        function aggregateResults(data) {
+            const byStrategy = {};
+
+            for (const r of data) {
+                const key = `${r.encoding}+${r.compression}+${r.packing}`;
+                if (!byStrategy[key]) {
+                    byStrategy[key] = {
+                        encoding: r.encoding,
+                        compression: r.compression,
+                        packing: r.packing,
+                        blobs: 0,
+                        rawSize: 0,
+                        compressedSize: 0,
+                        encodeTime: 0,
+                        decodeTime: 0,
+                        count: 0
+                    };
+                }
+                byStrategy[key].blobs += r.blob_count;
+                byStrategy[key].rawSize += r.raw_size;
+                byStrategy[key].compressedSize += r.compressed_size;
+                byStrategy[key].encodeTime += r.encode_time_ms;
+                byStrategy[key].decodeTime += r.decode_time_ms;
+                byStrategy[key].count++;
+            }
+
+            return Object.values(byStrategy).map(s => ({
+                ...s,
+                encodeTime: s.encodeTime / s.count,
+                decodeTime: s.decodeTime / s.count
+            }));
+        }
+
+        function renderResults(data) {
+            const aggregated = aggregateResults(data);
+            const sorted = aggregated.sort((a, b) => a.blobs - b.blobs);
+
+            const baselineData = aggregated.find(s =>
+                s.encoding === baseline.encoding &&
+                s.compression === baseline.compression &&
+                s.packing === baseline.packing
+            );
+            const baselineBlobs = baselineData?.blobs || sorted[sorted.length - 1].blobs;
+
+            // Summary cards
+            const totalBlocks = data.length / aggregated.length;
+            const bestStrategy = sorted[0];
+            const savings = baselineBlobs - bestStrategy.blobs;
+
+            document.getElementById('summary').innerHTML = `
+                <div class="card">
+                    <h3>BLOCKS ANALYZED</h3>
+                    <div class="value">${totalBlocks}</div>
+                    <div class="sub">${formatBytes(baselineData?.rawSize || 0)} total data</div>
+                </div>
+                <div class="card">
+                    <h3>BEST STRATEGY</h3>
+                    <div class="value">${bestStrategy.compression}</div>
+                    <div class="sub">${bestStrategy.encoding}+${bestStrategy.packing}</div>
+                </div>
+                <div class="card">
+                    <h3>BLOB SAVINGS</h3>
+                    <div class="value good">-${savings}</div>
+                    <div class="sub">${((savings / baselineBlobs) * 100).toFixed(1)}% reduction vs baseline</div>
+                </div>
+                <div class="card">
+                    <h3>BASELINE BLOBS</h3>
+                    <div class="value">${baselineBlobs}</div>
+                    <div class="sub">rlp+none+naive_31</div>
+                </div>
+            `;
+
+            // Table
+            const tbody = document.querySelector('#results tbody');
+            tbody.innerHTML = sorted.map((s, i) => {
+                const diff = s.blobs - baselineBlobs;
+                const pct = ((diff / baselineBlobs) * 100).toFixed(1);
+                const ratio = (s.rawSize / s.compressedSize).toFixed(2);
+                const isBest = i === 0;
+                const diffClass = diff < 0 ? 'good' : (diff > 0 ? 'bad' : 'neutral');
+
+                return `
+                    <tr class="${isBest ? 'best' : ''}">
+                        <td><strong>${s.encoding}+${s.compression}+${s.packing}</strong></td>
+                        <td>${s.blobs}</td>
+                        <td class="${diffClass}">${diff >= 0 ? '+' : ''}${diff} (${pct}%)</td>
+                        <td>${formatBytes(s.rawSize)}</td>
+                        <td>${formatBytes(s.compressedSize)}</td>
+                        <td>${ratio}x</td>
+                        <td>${s.encodeTime.toFixed(2)}</td>
+                        <td>${s.decodeTime.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderIndividual(data, strategyFilter = '', blockFilter = '') {
+            let filtered = data;
+            if (strategyFilter) {
+                filtered = filtered.filter(r =>
+                    `${r.encoding}+${r.compression}+${r.packing}` === strategyFilter
+                );
+            }
+            if (blockFilter) {
+                filtered = filtered.filter(r => r.payload_file === blockFilter);
+            }
+
+            const tbody = document.querySelector('#individual tbody');
+            tbody.innerHTML = filtered.map(r => {
+                const strategy = `${r.encoding}+${r.compression}+${r.packing}`;
+                const ratio = r.compressed_size > 0 ? (r.raw_size / r.compressed_size).toFixed(2) : 'N/A';
+                return `
+                    <tr>
+                        <td>${r.payload_file}</td>
+                        <td><strong>${strategy}</strong></td>
+                        <td>${r.blob_count}</td>
+                        <td>${formatBytes(r.raw_size)}</td>
+                        <td>${formatBytes(r.compressed_size)}</td>
+                        <td>${ratio}x</td>
+                        <td>${(r.space_efficiency * 100).toFixed(1)}%</td>
+                        <td>${r.encode_time_ms.toFixed(2)}</td>
+                        <td>${r.decode_time_ms.toFixed(2)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function populateFilters(data) {
+            // Get unique strategies
+            const strategies = [...new Set(data.map(r =>
+                `${r.encoding}+${r.compression}+${r.packing}`
+            ))].sort();
+
+            // Get unique blocks
+            const blocks = [...new Set(data.map(r => r.payload_file))].sort();
+
+            const strategySelect = document.getElementById('strategyFilter');
+            strategies.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                strategySelect.appendChild(opt);
+            });
+
+            const blockSelect = document.getElementById('blockFilter');
+            blocks.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                blockSelect.appendChild(opt);
+            });
+        }
+
+        function applyFilters() {
+            const strategy = document.getElementById('strategyFilter').value;
+            const block = document.getElementById('blockFilter').value;
+            renderIndividual(allData, strategy, block);
+        }
+
+        document.getElementById('strategyFilter').addEventListener('change', applyFilters);
+        document.getElementById('blockFilter').addEventListener('change', applyFilters);
+
+        // Auto-load results.json
+        fetch('results.json')
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to load results.json');
+                return res.json();
+            })
+            .then(data => {
+                allData = data;
+                renderResults(data);
+                populateFilters(data);
+                renderIndividual(data);
+            })
+            .catch(err => {
+                document.getElementById('summary').innerHTML =
+                    `<div class="error">Error: ${err.message}. Make sure results.json exists in the site folder.</div>`;
+            });
+    </script>
+</body>
+</html>

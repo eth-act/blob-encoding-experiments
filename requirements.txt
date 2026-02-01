@@ -1,0 +1,6 @@
+rlp>=4.0.0
+ssz>=0.5.0
+zstandard>=0.22.0
+pytest>=8.0.0
+bitarray>=2.9.2
+click>=8.0.0
