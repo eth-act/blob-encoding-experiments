@@ -7,10 +7,10 @@ Benchmark different strategies for encoding the list of transactions into blobs.
 Takes Ethereum block transactions and tests different encoding pipelines:
 
 ```text
-Transactions → Encode (RLP/SSZ) → Compress (none/zstd/gzip) → Pack into Blobs (31-byte/254-bit)
+Transactions → Tx List Encode (RLP/SSZ) → Compress (none/zstd/gzip) → Pack into Blobs (31-byte/254-bit)
 ```
 
-Note: Encode (RLP/SSZ) is for the transaction list. The transactions themselves are already RLP encoded. In the future, we could experiment SSZing the transactions too (See EIP-7807)
+Note: Tx List Encode (RLP/SSZ) is only the transaction list and not the transactions. The transactions themselves are already RLP encoded. In the future, we could experiment SSZing the transactions too (See EIP-7807)
 
 We measure: 
 
@@ -30,25 +30,18 @@ pip install -r requirements.txt
 
 ## Usage
 
-### 1. Fetch Blocks
+### 1. Fetching Blocks
 
 Fetches beacon blocks using the Beacon API and extracts the execution payload:
 
 ```bash
 # Fetch last 100 beacon blocks (default)
 python fetch_blocks.py
-
-# Fetch specific count
-python fetch_blocks.py -c 50
-
-# Fetch from specific slot
-python fetch_blocks.py -s 9000000 -c 100
-
-# Use different beacon node
-python fetch_blocks.py -b https://your-beacon-node.com
 ```
 
-Blocks are saved to `payloads/` as JSON files.
+The execution payloads from the beacon block is saved to `payloads/` as a JSON file.
+
+You can also fetch the block/payload using a different method and copy it into `payloads/`
 
 ### 2. Run Benchmarks
 
@@ -74,56 +67,32 @@ cp results/benchmark_*.json site/results.json
 
 ## How Block Fetching Works
 
-We use the Beacon API to fetch blocks because it returns execution payloads with transactions already as raw bytes as we would expect if they were sent from the CL to the EL via engine API.
+We use the Beacon API to fetch blocks because it returns execution payloads with RLP encoded transactions. This is what we would expect if they were sent from the CL to the EL via engine API.
+
+Endpoint called:
 
 ```text
 GET /eth/v2/beacon/blocks/{slot}
 ```
 
-The response contains:
-
-```json
-{
-  "data": {
-    "message": {
-      "body": {
-        "execution_payload": {
-          "transactions": ["0x02f87...", "0x02f87..."],
-          ...
-        }
-      }
-    }
-  }
-}
-```
-
-We only care about the execution_payload as that is what gets put into blobs. Currently it is only the transactions, see EIP 8142 for more details.
-
 ## Strategies Explained
+We have a few variables that we want to play with:
+
+- Tx list encoding
+- Compression
+- Blob packing
 
 ### Transaction List Encoding
 
-Takes `list[bytes]` (raw transactions) and encodes to a single `bytes` blob.
-
-- **RLP**: `rlp.encode([tx1, tx2, ...])` - Standard Ethereum encoding (baseline)
-- **SSZ**: Simple Serialize with length-prefixed transactions - Used in consensus layer
-
-Note: I imagine that this won't have that much of an impact since it's just encoding a List of byte lists.
+Takes `list[bytes]` (raw RLP encoded transactions) and encodes to a single `bytes` blob.
 
 ### Compression
 
 Takes encoded bytes and compresses them.
 
-- **none**: Pass-through, no compression (baseline)
-- **zstd**: Zstandard at level 22 (max compressoon)
-- **gzip**: Gzip at level 9 (max compression)
-
 ### Blob Packing
 
-Takes compressed bytes and packs into 128KB blobs. Each blob has 4096 field elements of 32 bytes, but the BLS12-381 scalar field modulus (~2^255) limits usable bits per element.
-
-- **naive_31**: Use 31 bytes per element (127,008 bytes/blob) - Simple, zeroes the high byte
-- **bitpack_254**: Use 254 bits per element (130,048 bytes/blob) - Bit-level packing
+Takes compressed bytes and packs into ~128KB blobs. Each blob has 4096 field elements of 32 bytes, but the BLS12-381 scalar field modulus (~2^255) limits usable bits per element.
 
 > TODO: There is an even tighter packing where we pack according to the modulus, however it is more complex.
 
@@ -160,23 +129,13 @@ COMPRESSORS = {
 Create `src/packing/mypacker.py`:
 
 ```python
-from .base import BLOB_SIZE, FIELD_ELEMENTS_PER_BLOB
-
 class MyPacker:
-    name = "mypacker"
-    usable_bytes_per_blob = 127000  # How many data bytes fit in one blob
 
     def pack(self, data: bytes) -> list[bytes]:
-        """Pack data into list of 128KB blobs."""
-        blobs = []
-        # ... pack data into blobs ...
-        # Each blob must be exactly BLOB_SIZE (131072) bytes
-        return blobs
+        ...
 
     def unpack(self, blobs: list[bytes]) -> bytes:
-        """Unpack blobs back to data."""
-        # ... extract data from blobs ...
-        return data
+        ...
 ```
 
 Register in `src/packing/__init__.py`:
@@ -199,12 +158,10 @@ class MyEncoder:
     name = "myenc"
 
     def encode(self, transactions: list[bytes]) -> bytes:
-        """Encode list of raw transactions to bytes."""
-        return encoded_data
+        ...
 
     def decode(self, data: bytes) -> list[bytes]:
-        """Decode bytes back to list of raw transactions."""
-        return transactions
+        ...
 ```
 
 Register in `src/tx_list_encoding/__init__.py`:
