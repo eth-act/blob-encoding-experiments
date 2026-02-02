@@ -4,11 +4,13 @@ from .base import Compressor
 from .none import NoCompression
 from .zstd import ZstdCompressor
 from .gzip import GzipCompressor
+from .snappy import SnappyCompressor
 
 
 # Registry of available compressors (instantiated with specific levels)
 COMPRESSORS: dict[str, Compressor] = {
     "none": NoCompression(),
+    "snappy": SnappyCompressor(),
     "zstd_3": ZstdCompressor(level=3),
     "zstd_6": ZstdCompressor(level=6),
     "zstd_22": ZstdCompressor(level=22),
@@ -28,6 +30,7 @@ __all__ = [
     "NoCompression",
     "ZstdCompressor",
     "GzipCompressor",
+    "SnappyCompressor",
     "COMPRESSORS",
     "get_compressor",
 ]
