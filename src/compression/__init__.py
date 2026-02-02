@@ -11,6 +11,7 @@ from .snappy import SnappyCompressor
 COMPRESSORS: dict[str, Compressor] = {
     "none": NoCompression(),
     "snappy": SnappyCompressor(),
+    "zstd_1": ZstdCompressor(level=1),
     "zstd_3": ZstdCompressor(level=3),
     "zstd_6": ZstdCompressor(level=6),
     "zstd_22": ZstdCompressor(level=22),
