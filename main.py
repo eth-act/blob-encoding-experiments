@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.benchmark import run_benchmark, save_results
 from src.compression import COMPRESSORS
-from src.tx_list_encoding import ENCODERS
+from src.tx_list_encoding import ENCODERS, PERTX_COMPRESSIONS
 from src.packing import PACKERS
 
 
@@ -21,17 +21,22 @@ def main():
         print(f"No JSON files found in {payloads_dir}")
         return
 
+    # Build encoder list including per-tx variants
+    encoders = list(ENCODERS.keys())
+    for comp in PERTX_COMPRESSIONS:
+        encoders.append(f"rlp_pertx_{comp}")
+
     # Show what we're testing
-    num_combinations = len(ENCODERS) * len(COMPRESSORS) * len(PACKERS)
+    num_combinations = len(encoders) * len(COMPRESSORS) * len(PACKERS)
     print(f"Payloads: {len(payload_files)} files")
     print(f"Strategies: {num_combinations} combinations")
-    print(f"  Encodings:    {list(ENCODERS.keys())}")
+    print(f"  Encodings:    {encoders}")
     print(f"  Compression:  {list(COMPRESSORS.keys())}")
     print(f"  Packing:      {list(PACKERS.keys())}")
     print()
 
     # Run benchmarks
-    results = run_benchmark(payload_files, None, None, None, iterations)
+    results = run_benchmark(payload_files, encoders, None, None, iterations)
 
     # Save results
     output_file = save_results(results, results_dir)
