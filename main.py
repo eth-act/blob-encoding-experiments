@@ -22,17 +22,20 @@ def main():
         return
 
     # Build encoder list including per-tx variants
-    encoders = list(ENCODERS.keys())
-    for comp in PERTX_COMPRESSIONS:
-        encoders.append(f"rlp_pertx_{comp}")
+    base_encoders = list(ENCODERS.keys())
+    pertx_encoders = [f"rlp_pertx_{comp}" for comp in PERTX_COMPRESSIONS]
+    encoders = base_encoders + pertx_encoders
 
-    # Show what we're testing
-    num_combinations = len(encoders) * len(COMPRESSORS) * len(PACKERS)
+    # Per-tx encoders only use compression=none, others use all compressors
+    num_base = len(base_encoders) * len(COMPRESSORS) * len(PACKERS)
+    num_pertx = len(pertx_encoders) * 1 * len(PACKERS)  # only "none" compression
+    num_combinations = num_base + num_pertx
+
     print(f"Payloads: {len(payload_files)} files")
     print(f"Strategies: {num_combinations} combinations")
-    print(f"  Encodings:    {encoders}")
-    print(f"  Compression:  {list(COMPRESSORS.keys())}")
-    print(f"  Packing:      {list(PACKERS.keys())}")
+    print(f"  Base encodings:  {base_encoders} × {len(COMPRESSORS)} compressions")
+    print(f"  Per-tx encodings: {pertx_encoders} × none only")
+    print(f"  Packing:         {list(PACKERS.keys())}")
     print()
 
     # Run benchmarks

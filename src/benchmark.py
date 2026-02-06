@@ -106,7 +106,11 @@ def run_benchmark(
             tx_encoder = get_encoder(enc_name)
             data = tx_encoder.encode(transactions)
 
-            for comp_name in compressors:
+            # Per-tx encoders already compress, so only use "none" for blob compression
+            is_pertx = enc_name.startswith("rlp_pertx_")
+            comp_list = ["none"] if is_pertx else compressors
+
+            for comp_name in comp_list:
                 for pack_name in packers:
                     blob_encoder = BlobEncoder.from_names(comp_name, pack_name)
                     result = benchmark_single(
