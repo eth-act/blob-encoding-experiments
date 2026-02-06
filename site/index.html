@@ -59,12 +59,101 @@
             border-radius: 4px;
             min-width: 200px;
         }
+        .legend {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .legend h3 { margin: 0 0 15px 0; color: #333; }
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .legend-section h4 {
+            margin: 0 0 8px 0;
+            color: #666;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .legend-section code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        .legend-section ul {
+            margin: 0;
+            padding-left: 0;
+            list-style: none;
+        }
+        .legend-section li {
+            margin: 4px 0;
+            font-size: 14px;
+            color: #555;
+        }
+        .legend-section li code {
+            min-width: 100px;
+            display: inline-block;
+        }
+        .legend-example {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .legend-example code {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
     </style>
 </head>
 <body>
     <h1>Blob Encoding Benchmark Results</h1>
 
     <div class="summary" id="summary"></div>
+
+    <div class="legend">
+        <h3>Strategy Legend</h3>
+        <p style="margin: 0 0 15px 0; color: #666;">
+            Strategies are named as <code>encoding + compression + packing</code>
+        </p>
+        <div class="legend-grid">
+            <div class="legend-section">
+                <h4>Encoding (tx list format)</h4>
+                <ul>
+                    <li><code>rlp</code> — RLP-encoded transaction list</li>
+                    <li><code>ssz</code> — SSZ-encoded transaction list</li>
+                    <li><code>rlp_pertx_*</code> — Each tx compressed individually, then RLP list</li>
+                </ul>
+            </div>
+            <div class="legend-section">
+                <h4>Compression</h4>
+                <ul>
+                    <li><code>none</code> — No compression (baseline)</li>
+                    <li><code>snappy</code> — Fast, balanced compression</li>
+                    <li><code>zstd_1</code> — Zstandard level 1 (fastest)</li>
+                    <li><code>zstd_3</code> — Zstandard level 3</li>
+                    <li><code>zstd_6</code> — Zstandard level 6</li>
+                    <li><code>zstd_22</code> — Zstandard level 22 (max compression)</li>
+                    <li><code>gzip_9</code> — Gzip level 9</li>
+                </ul>
+            </div>
+            <div class="legend-section">
+                <h4>Packing (blob field encoding)</h4>
+                <ul>
+                    <li><code>naive_31</code> — 31 bytes per 32-byte field element (simple, wastes 1 byte/element)</li>
+                    <li><code>bitpack_254</code> — 254 bits per field element (BLS12-381 optimized)</li>
+                </ul>
+            </div>
+        </div>
+        <div class="legend-example">
+            <strong>Example:</strong> <code>rlp_pertx_zstd_3+zstd_22+bitpack_254</code> means:
+            compress each tx with zstd level 3, wrap in RLP list, then compress entire list with zstd level 22, then bitpack into blobs.
+        </div>
+    </div>
 
     <h2>Aggregate Results</h2>
     <table id="results">
