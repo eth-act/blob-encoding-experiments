@@ -21,10 +21,11 @@ class BenchmarkResult:
     compression: str        # Compression (none, zstd, gzip)
     packing: str            # Blob packing (naive, bitpack)
     payload_file: str
-    raw_size: int           # Encoded transaction list size in bytes
-    compressed_size: int    # After compression
+    tx_raw_size: int        # Sum of raw transaction bytes (before any encoding)
+    encoded_size: int       # After tx list encoding (includes per-tx compression if any)
+    compressed_size: int    # After blob compression
     blob_count: int         # Number of blobs produced
-    space_efficiency: float # raw_size / (blob_count * usable_blob_capacity)
+    space_efficiency: float # tx_raw_size / (blob_count * usable_blob_capacity)
     encode_time_ms: float   # Time to compress + pack
     decode_time_ms: float   # Time to unpack + decompress
 
@@ -34,10 +35,11 @@ def benchmark_single(
     blob_encoder: BlobEncoder,
     encoding_name: str,
     payload_file: str,
+    tx_raw_size: int,
     iterations: int = 10,
 ) -> BenchmarkResult:
     """Run benchmark for a single encoder on a single payload."""
-    raw_size = len(data)
+    encoded_size = len(data)
 
     # Benchmark encoding
     encode_times = []
@@ -60,14 +62,15 @@ def benchmark_single(
     # Calculate metrics
     blob_count = len(blobs)
     usable_per_blob = blob_encoder.packer.usable_bytes_per_blob
-    space_efficiency = raw_size / (blob_count * usable_per_blob) if blob_count > 0 else 0
+    space_efficiency = tx_raw_size / (blob_count * usable_per_blob) if blob_count > 0 else 0
 
     return BenchmarkResult(
         encoding=encoding_name,
         compression=blob_encoder.compressor.name,
         packing=blob_encoder.packer.name,
         payload_file=payload_file,
-        raw_size=raw_size,
+        tx_raw_size=tx_raw_size,
+        encoded_size=encoded_size,
         compressed_size=compressed_size,
         blob_count=blob_count,
         space_efficiency=space_efficiency,
@@ -96,6 +99,8 @@ def run_benchmark(
     for payload_file in payload_files:
         print(f"Processing {payload_file.name}...")
         transactions = load_transactions(payload_file)
+        # Raw size = sum of all transaction bytes (before any encoding/compression)
+        tx_raw_size = sum(len(tx) for tx in transactions)
 
         for enc_name in encoders:
             tx_encoder = get_encoder(enc_name)
@@ -105,7 +110,7 @@ def run_benchmark(
                 for pack_name in packers:
                     blob_encoder = BlobEncoder.from_names(comp_name, pack_name)
                     result = benchmark_single(
-                        data, blob_encoder, enc_name, payload_file.name, iterations
+                        data, blob_encoder, enc_name, payload_file.name, tx_raw_size, iterations
                     )
                     results.append(result)
                     print(f"  {enc_name}+{blob_encoder.name}: {result.blob_count} blobs, "

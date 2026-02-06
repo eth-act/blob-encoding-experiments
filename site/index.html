@@ -162,9 +162,10 @@
                 <th>Strategy</th>
                 <th>Blobs</th>
                 <th>vs Baseline</th>
-                <th>Raw Size</th>
+                <th>Tx Raw</th>
+                <th>Encoded</th>
                 <th>Compressed</th>
-                <th>Compression Ratio</th>
+                <th>Total Ratio</th>
                 <th>Encode (ms)</th>
                 <th>Decode (ms)</th>
             </tr>
@@ -191,9 +192,9 @@
                 <th>Block</th>
                 <th>Strategy</th>
                 <th>Blobs</th>
-                <th>Raw Size</th>
+                <th>Tx Raw</th>
+                <th>Encoded</th>
                 <th>Compressed</th>
-                <th>Compression Ratio</th>
                 <th>Efficiency</th>
                 <th>Encode (ms)</th>
                 <th>Decode (ms)</th>
@@ -223,7 +224,8 @@
                         compression: r.compression,
                         packing: r.packing,
                         blobs: 0,
-                        rawSize: 0,
+                        txRawSize: 0,
+                        encodedSize: 0,
                         compressedSize: 0,
                         encodeTime: 0,
                         decodeTime: 0,
@@ -231,7 +233,9 @@
                     };
                 }
                 byStrategy[key].blobs += r.blob_count;
-                byStrategy[key].rawSize += r.raw_size;
+                // Support both old (raw_size) and new (tx_raw_size) field names
+                byStrategy[key].txRawSize += r.tx_raw_size ?? r.raw_size;
+                byStrategy[key].encodedSize += r.encoded_size ?? r.raw_size;
                 byStrategy[key].compressedSize += r.compressed_size;
                 byStrategy[key].encodeTime += r.encode_time_ms;
                 byStrategy[key].decodeTime += r.decode_time_ms;
@@ -265,7 +269,7 @@
                 <div class="card">
                     <h3>BLOCKS ANALYZED</h3>
                     <div class="value">${totalBlocks}</div>
-                    <div class="sub">${formatBytes(baselineData?.rawSize || 0)} total data</div>
+                    <div class="sub">${formatBytes(baselineData?.txRawSize || 0)} total tx data</div>
                 </div>
                 <div class="card">
                     <h3>BEST STRATEGY</h3>
@@ -289,7 +293,7 @@
             tbody.innerHTML = sorted.map((s, i) => {
                 const diff = s.blobs - baselineBlobs;
                 const pct = ((diff / baselineBlobs) * 100).toFixed(1);
-                const ratio = (s.rawSize / s.compressedSize).toFixed(2);
+                const totalRatio = (s.txRawSize / s.compressedSize).toFixed(2);
                 const isBest = i === 0;
                 const diffClass = diff < 0 ? 'good' : (diff > 0 ? 'bad' : 'neutral');
 
@@ -298,9 +302,10 @@
                         <td><strong>${s.encoding}+${s.compression}+${s.packing}</strong></td>
                         <td>${s.blobs}</td>
                         <td class="${diffClass}">${diff >= 0 ? '+' : ''}${diff} (${pct}%)</td>
-                        <td>${formatBytes(s.rawSize)}</td>
+                        <td>${formatBytes(s.txRawSize)}</td>
+                        <td>${formatBytes(s.encodedSize)}</td>
                         <td>${formatBytes(s.compressedSize)}</td>
-                        <td>${ratio}x</td>
+                        <td>${totalRatio}x</td>
                         <td>${s.encodeTime.toFixed(2)}</td>
                         <td>${s.decodeTime.toFixed(2)}</td>
                     </tr>
@@ -322,15 +327,17 @@
             const tbody = document.querySelector('#individual tbody');
             tbody.innerHTML = filtered.map(r => {
                 const strategy = `${r.encoding}+${r.compression}+${r.packing}`;
-                const ratio = r.compressed_size > 0 ? (r.raw_size / r.compressed_size).toFixed(2) : 'N/A';
+                // Support both old and new field names
+                const txRaw = r.tx_raw_size ?? r.raw_size;
+                const encoded = r.encoded_size ?? r.raw_size;
                 return `
                     <tr>
                         <td>${r.payload_file}</td>
                         <td><strong>${strategy}</strong></td>
                         <td>${r.blob_count}</td>
-                        <td>${formatBytes(r.raw_size)}</td>
+                        <td>${formatBytes(txRaw)}</td>
+                        <td>${formatBytes(encoded)}</td>
                         <td>${formatBytes(r.compressed_size)}</td>
-                        <td>${ratio}x</td>
                         <td>${(r.space_efficiency * 100).toFixed(1)}%</td>
                         <td>${r.encode_time_ms.toFixed(2)}</td>
                         <td>${r.decode_time_ms.toFixed(2)}</td>

@@ -53,7 +53,7 @@ def main():
     for r in results:
         key = f"{r.encoding}+{r.compression}+{r.packing}"
         by_strategy[key]["blobs"] += r.blob_count
-        by_strategy[key]["raw"] += r.raw_size
+        by_strategy[key]["raw"] += r.tx_raw_size
 
     # Find baseline
     baseline_key = "rlp+none+naive_31"
