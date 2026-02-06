@@ -139,6 +139,17 @@
             margin: 0;
             color: #555;
         }
+        td code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        #results td:first-child code { background: #e3f2fd; color: #1565c0; }
+        #results td:nth-child(2) code { background: #fff3e0; color: #e65100; }
+        #results td:nth-child(3) code { background: #f3e5f5; color: #7b1fa2; }
+        .controls label { font-size: 14px; color: #555; }
     </style>
 </head>
 <body>
@@ -206,18 +217,37 @@
     </div>
 
     <h2>Aggregate Results</h2>
+    <div class="controls" id="aggregateControls">
+        <label>Encoding:
+            <select id="encFilter">
+                <option value="">All</option>
+            </select>
+        </label>
+        <label style="margin-left: 15px;">Compression:
+            <select id="compFilter">
+                <option value="">All</option>
+            </select>
+        </label>
+        <label style="margin-left: 15px;">Packing:
+            <select id="packFilter">
+                <option value="">All</option>
+            </select>
+        </label>
+        <button id="resetFilters" style="margin-left: 15px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer;">Reset</button>
+        <span id="filterCount" style="margin-left: 15px; color: #666;"></span>
+    </div>
     <table id="results">
         <thead>
             <tr>
-                <th>Strategy</th>
+                <th title="Transaction list encoding format">Encoding</th>
+                <th title="Compression algorithm applied to blob data">Compression</th>
+                <th title="How data is packed into blob field elements">Packing</th>
                 <th title="Number of 128KB blobs needed">Blobs</th>
                 <th title="Difference from rlp+none+naive_31 baseline">vs Baseline</th>
-                <th title="Sum of raw transaction bytes (before encoding)">Tx Raw</th>
-                <th title="Size after tx list encoding (includes per-tx compression)">Encoded</th>
                 <th title="Size after blob-level compression">Compressed</th>
-                <th title="Overall compression ratio: Tx Raw ÷ Compressed">Total Ratio</th>
-                <th title="Average time to compress and pack into blobs">Encode (ms)</th>
-                <th title="Average time to unpack and decompress">Decode (ms)</th>
+                <th title="Overall compression ratio: Tx Raw ÷ Compressed">Ratio</th>
+                <th title="Average time to compress and pack into blobs">Enc (ms)</th>
+                <th title="Average time to unpack and decompress">Dec (ms)</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -299,19 +329,22 @@
             }));
         }
 
-        function renderResults(data) {
-            const aggregated = aggregateResults(data);
-            const sorted = aggregated.sort((a, b) => a.blobs - b.blobs);
+        let aggregatedData = [];
+        let baselineBlobs = 0;
 
-            const baselineData = aggregated.find(s =>
+        function renderResults(data) {
+            aggregatedData = aggregateResults(data);
+            const sorted = aggregatedData.sort((a, b) => a.blobs - b.blobs);
+
+            const baselineData = aggregatedData.find(s =>
                 s.encoding === baseline.encoding &&
                 s.compression === baseline.compression &&
                 s.packing === baseline.packing
             );
-            const baselineBlobs = baselineData?.blobs || sorted[sorted.length - 1].blobs;
+            baselineBlobs = baselineData?.blobs || sorted[sorted.length - 1].blobs;
 
             // Summary cards
-            const totalBlocks = data.length / aggregated.length;
+            const totalBlocks = data.length / aggregatedData.length;
             const bestStrategy = sorted[0];
             const savings = baselineBlobs - bestStrategy.blobs;
 
@@ -338,22 +371,81 @@
                 </div>
             `;
 
-            // Table
+            // Populate aggregate filters
+            populateAggregateFilters(aggregatedData);
+
+            // Render table
+            renderAggregateTable(aggregatedData);
+        }
+
+        function populateAggregateFilters(data) {
+            const encodings = [...new Set(data.map(r => r.encoding))].sort();
+            const compressions = [...new Set(data.map(r => r.compression))].sort();
+            const packings = [...new Set(data.map(r => r.packing))].sort();
+
+            const encSelect = document.getElementById('encFilter');
+            const compSelect = document.getElementById('compFilter');
+            const packSelect = document.getElementById('packFilter');
+
+            // Clear existing options (except "All")
+            encSelect.innerHTML = '<option value="">All</option>';
+            compSelect.innerHTML = '<option value="">All</option>';
+            packSelect.innerHTML = '<option value="">All</option>';
+
+            encodings.forEach(e => {
+                const opt = document.createElement('option');
+                opt.value = e;
+                opt.textContent = e;
+                encSelect.appendChild(opt);
+            });
+
+            compressions.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c;
+                opt.textContent = c;
+                compSelect.appendChild(opt);
+            });
+
+            packings.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                packSelect.appendChild(opt);
+            });
+        }
+
+        function renderAggregateTable(data) {
+            const encFilter = document.getElementById('encFilter').value;
+            const compFilter = document.getElementById('compFilter').value;
+            const packFilter = document.getElementById('packFilter').value;
+
+            let filtered = data;
+            if (encFilter) filtered = filtered.filter(s => s.encoding === encFilter);
+            if (compFilter) filtered = filtered.filter(s => s.compression === compFilter);
+            if (packFilter) filtered = filtered.filter(s => s.packing === packFilter);
+
+            const sorted = filtered.sort((a, b) => a.blobs - b.blobs);
+            const bestBlobs = sorted.length > 0 ? sorted[0].blobs : 0;
+
+            // Update filter count
+            document.getElementById('filterCount').textContent =
+                `Showing ${filtered.length} of ${data.length} strategies`;
+
             const tbody = document.querySelector('#results tbody');
             tbody.innerHTML = sorted.map((s, i) => {
                 const diff = s.blobs - baselineBlobs;
                 const pct = ((diff / baselineBlobs) * 100).toFixed(1);
                 const totalRatio = (s.txRawSize / s.compressedSize).toFixed(2);
-                const isBest = i === 0;
+                const isBest = s.blobs === bestBlobs;
                 const diffClass = diff < 0 ? 'good' : (diff > 0 ? 'bad' : 'neutral');
 
                 return `
                     <tr class="${isBest ? 'best' : ''}">
-                        <td><strong>${s.encoding}+${s.compression}+${s.packing}</strong></td>
-                        <td>${s.blobs}</td>
+                        <td><code>${s.encoding}</code></td>
+                        <td><code>${s.compression}</code></td>
+                        <td><code>${s.packing}</code></td>
+                        <td><strong>${s.blobs}</strong></td>
                         <td class="${diffClass}">${diff >= 0 ? '+' : ''}${diff} (${pct}%)</td>
-                        <td>${formatBytes(s.txRawSize)}</td>
-                        <td>${formatBytes(s.encodedSize)}</td>
                         <td>${formatBytes(s.compressedSize)}</td>
                         <td>${totalRatio}x</td>
                         <td>${s.encodeTime.toFixed(2)}</td>
@@ -430,6 +522,17 @@
 
         document.getElementById('strategyFilter').addEventListener('change', applyFilters);
         document.getElementById('blockFilter').addEventListener('change', applyFilters);
+
+        // Aggregate filters
+        document.getElementById('encFilter').addEventListener('change', () => renderAggregateTable(aggregatedData));
+        document.getElementById('compFilter').addEventListener('change', () => renderAggregateTable(aggregatedData));
+        document.getElementById('packFilter').addEventListener('change', () => renderAggregateTable(aggregatedData));
+        document.getElementById('resetFilters').addEventListener('click', () => {
+            document.getElementById('encFilter').value = '';
+            document.getElementById('compFilter').value = '';
+            document.getElementById('packFilter').value = '';
+            renderAggregateTable(aggregatedData);
+        });
 
         // Auto-load results.json
         fetch('results.json')
