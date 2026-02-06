@@ -108,6 +108,37 @@
             background: #e8f5e9;
             color: #2e7d32;
         }
+        th[title] {
+            cursor: help;
+            border-bottom: 1px dashed rgba(255,255,255,0.5);
+        }
+        .column-legend {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+        .column-legend h4 {
+            margin: 0 0 10px 0;
+            color: #666;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .column-legend dl {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 4px 12px;
+            margin: 0;
+            font-size: 14px;
+        }
+        .column-legend dt {
+            font-weight: 600;
+            color: #333;
+        }
+        .column-legend dd {
+            margin: 0;
+            color: #555;
+        }
     </style>
 </head>
 <body>
@@ -153,6 +184,25 @@
             <strong>Example:</strong> <code>rlp_pertx_zstd_3+zstd_22+bitpack_254</code> means:
             compress each tx with zstd level 3, wrap in RLP list, then compress entire list with zstd level 22, then bitpack into blobs.
         </div>
+        <div class="column-legend">
+            <h4>Column Definitions</h4>
+            <dl>
+                <dt>Blobs</dt>
+                <dd>Number of 128KB blobs needed to store all data</dd>
+                <dt>vs Baseline</dt>
+                <dd>Difference from rlp+none+naive_31 (no compression)</dd>
+                <dt>Tx Raw</dt>
+                <dd>Sum of raw transaction bytes before any encoding or compression</dd>
+                <dt>Encoded</dt>
+                <dd>Size after tx list encoding (RLP/SSZ wrapper, includes per-tx compression if used)</dd>
+                <dt>Compressed</dt>
+                <dd>Size after blob-level compression is applied</dd>
+                <dt>Total Ratio</dt>
+                <dd>Overall compression: Tx Raw ÷ Compressed</dd>
+                <dt>Efficiency</dt>
+                <dd>How full the blobs are: Tx Raw ÷ (Blobs × usable capacity)</dd>
+            </dl>
+        </div>
     </div>
 
     <h2>Aggregate Results</h2>
@@ -160,14 +210,14 @@
         <thead>
             <tr>
                 <th>Strategy</th>
-                <th>Blobs</th>
-                <th>vs Baseline</th>
-                <th>Tx Raw</th>
-                <th>Encoded</th>
-                <th>Compressed</th>
-                <th>Total Ratio</th>
-                <th>Encode (ms)</th>
-                <th>Decode (ms)</th>
+                <th title="Number of 128KB blobs needed">Blobs</th>
+                <th title="Difference from rlp+none+naive_31 baseline">vs Baseline</th>
+                <th title="Sum of raw transaction bytes (before encoding)">Tx Raw</th>
+                <th title="Size after tx list encoding (includes per-tx compression)">Encoded</th>
+                <th title="Size after blob-level compression">Compressed</th>
+                <th title="Overall compression ratio: Tx Raw ÷ Compressed">Total Ratio</th>
+                <th title="Average time to compress and pack into blobs">Encode (ms)</th>
+                <th title="Average time to unpack and decompress">Decode (ms)</th>
             </tr>
         </thead>
         <tbody></tbody>
@@ -191,13 +241,13 @@
             <tr>
                 <th>Block</th>
                 <th>Strategy</th>
-                <th>Blobs</th>
-                <th>Tx Raw</th>
-                <th>Encoded</th>
-                <th>Compressed</th>
-                <th>Efficiency</th>
-                <th>Encode (ms)</th>
-                <th>Decode (ms)</th>
+                <th title="Number of 128KB blobs needed">Blobs</th>
+                <th title="Sum of raw transaction bytes (before encoding)">Tx Raw</th>
+                <th title="Size after tx list encoding (includes per-tx compression)">Encoded</th>
+                <th title="Size after blob-level compression">Compressed</th>
+                <th title="How full the blobs are: Tx Raw ÷ (Blobs × usable capacity)">Efficiency</th>
+                <th title="Time to compress and pack into blobs">Encode (ms)</th>
+                <th title="Time to unpack and decompress">Decode (ms)</th>
             </tr>
         </thead>
         <tbody></tbody>
